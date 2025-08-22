@@ -105,8 +105,8 @@ async function checkAndSend() {
 
 // WhatsApp events
 client.on("qr", (qr) => {
-  console.log("📱 Scan this QR (first time only):");
-  qrcode.generate(qr, { small: true });
+    console.log("📱 Scan this QR (copy it into a QR generator):\n", qr);
+    qrcode.generate(qr, { small: true });
 });
 
 client.on("remote_session_saved", () => {
@@ -153,3 +153,4 @@ app.listen(PORT, () => {
     checkAndSend().catch(console.error);
   }, { timezone: TZ });
 });
+
