@@ -148,11 +148,12 @@ app.listen(PORT, () => {
   console.log(`HTTP listening on :${PORT}`);
   console.log(`Timezone: ${TZ}`);
   // Schedule at 08:00 Asia/Kolkata
-  cron.schedule("0 59 21 * * *", () => {
+  cron.schedule("0 15 22 * * *", () => {
     console.log("⏰ 08:00 job firing…");
     checkAndSend().catch(console.error);
   }, { timezone: TZ });
 });
+
 
 
 
