@@ -2,31 +2,93 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Stock Editor</title>
+  <title>Stock Manager</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body { font-family: system-ui, Arial, sans-serif; max-width: 720px; margin: 24px auto; padding: 0 12px; }
-    h1 { margin-bottom: 8px; }
-    .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
-    label { display:block; font-weight:600; margin-bottom:6px; }
-    input { width: 120px; padding: 6px 8px; font-size: 16px; }
-    .row { display:flex; align-items:center; gap:12px; margin-top:8px; }
-    .muted { color:#666; font-size:12px; }
-    .ok { color: #0a7a0a; }
-    .warn { color: #b34700; }
-    .bad { color: #b00020; }
+    :root {
+      --ok: #0a7a0a;
+      --warn: #b34700;
+      --bad: #b00020;
+      --border: #e0e0e0;
+      --bg: #fafafa;
+    }
+    body {
+      font-family: system-ui, Arial, sans-serif;
+      max-width: 800px;
+      margin: 24px auto;
+      padding: 0 16px;
+      background: var(--bg);
+      color: #222;
+    }
+    h1 {
+      font-size: 1.8rem;
+      margin-bottom: 4px;
+    }
+    .muted {
+      color: #666;
+      font-size: 0.9rem;
+    }
+    #status {
+      margin: 16px 0;
+      font-weight: 600;
+    }
+    .card {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px 20px;
+      margin-bottom: 18px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 3px 6px rgba(0,0,0,0.12);
+    }
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 10px 0;
+    }
+    label {
+      font-size: 1.1rem;
+      font-weight: 600;
+      display: block;
+    }
+    input[type="number"] {
+      width: 100px;
+      padding: 6px 10px;
+      font-size: 1rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+    input[type="number"]:focus {
+      border-color: #0077ff;
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(0,119,255,0.2);
+    }
+    .status {
+      font-weight: 600;
+      font-size: 0.95rem;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .ok   { color: var(--ok); }
+    .warn { color: var(--warn); }
+    .bad  { color: var(--bad); }
   </style>
 </head>
 <body>
-  <h1>Stock Editor</h1>
-  <p class="muted">Signed in anonymously. Change the numbers to update Firestore.</p>
+  <h1>📦 Stock Manager</h1>
+  <p class="muted">Signed in anonymously. Adjust stock levels to update Firestore in real time.</p>
 
   <div id="status" class="muted">Connecting…</div>
-
   <div id="items"></div>
 
   <script type="module">
-    // === 1) Paste your Firebase Web config here (from Firebase console) ===
+    // === Firebase Config ===
     const firebaseConfig = {
       apiKey: "AIzaSyBAb1v22oH1mOiqy2ew99U4UaSJV4L7J4s",
       authDomain: "store-manage-9ab9d.firebaseapp.com",
@@ -34,14 +96,14 @@
       storageBucket: "store-manage-9ab9d.firebasestorage.app"
     };
 
-    // === 2) Firebase Web SDK (ES modules via CDN) ===
+    // === Firebase SDK (ESM) ===
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
     import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
     import { getFirestore, doc, getDoc, setDoc, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
-    const db = getFirestore(app);
+    const db   = getFirestore(app);
 
     const ids = ["item1","item2","item3"];
     const defaults = {
@@ -53,44 +115,55 @@
     const elStatus = document.getElementById("status");
     const elItems  = document.getElementById("items");
 
-    // Helper to render an item card
+    // --- Helpers ---
+    function getStatus(stock) {
+      if (stock < 5) return { cls: "bad", text: "⛔ Low" };
+      if (stock < 8) return { cls: "warn", text: "⚠ Check" };
+      return { cls: "ok", text: "✔ OK" };
+    }
+
     function renderItem(id, data) {
-      const low = Number(data.stock) < 5;
-      const cls = low ? "bad" : (Number(data.stock) < 8 ? "warn" : "ok");
+      const { cls, text } = getStatus(Number(data.stock));
       return `
         <div class="card" data-id="${id}">
           <label>${data.name}</label>
           <div class="row">
             <input type="number" min="0" step="1" value="${Number(data.stock)}" />
-            <span class="${cls}">${low ? "Low" : "OK"}</span>
+            <span class="status ${cls}">${text}</span>
           </div>
-          <div class="muted">Doc: ${id}</div>
+          <div class="muted">Doc ID: ${id}</div>
         </div>
       `;
     }
 
-    // Debounce helper
     function debounce(fn, ms=400) {
       let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
     }
 
-    // Save handler
     const saveStock = debounce(async (id, value) => {
-      const n = Math.max(0, Math.floor(Number(value) || 0));
-      await setDoc(doc(db, "items", id), { stock: n, updatedAt: serverTimestamp() }, { merge: true });
+      try {
+        const n = Math.max(0, Math.floor(Number(value) || 0));
+        await setDoc(doc(db, "items", id), { stock: n, updatedAt: serverTimestamp() }, { merge: true });
+      } catch (err) {
+        console.error("Save failed:", err);
+        elStatus.textContent = "⚠ Error saving data";
+      }
     });
 
-    // Live UI
     function wireCard(div, id) {
       const input = div.querySelector("input");
       input.addEventListener("input", (e) => saveStock(id, e.target.value));
     }
 
-    // Auth then live listeners
-    signInAnonymously(auth).catch(console.error);
+    // --- Auth + Live Sync ---
+    signInAnonymously(auth).catch(err => {
+      console.error(err);
+      elStatus.textContent = "⚠ Auth failed";
+    });
+
     onAuthStateChanged(auth, async (user) => {
       if (!user) return;
-      elStatus.textContent = "Connected ✔";
+      elStatus.textContent = "✅ Connected";
 
       // Ensure docs exist
       for (const id of ids) {
@@ -101,19 +174,33 @@
         }
       }
 
-      // Subscribe to each doc updates
+      // Initial render once
       elItems.innerHTML = ids.map(id => renderItem(id, defaults[id])).join("");
-      ids.forEach((id, i) => {
+      ids.forEach((id) => {
+        wireCard(document.querySelector(`.card[data-id="${id}"]`), id);
+      });
+
+      // Subscribe to Firestore updates
+      ids.forEach((id) => {
         const ref = doc(db, "items", id);
         onSnapshot(ref, (snap) => {
           const data = { ...defaults[id], ...(snap.data() || {}) };
           const card = document.querySelector(`.card[data-id="${id}"]`);
           if (card) {
-            card.outerHTML = renderItem(id, data);
-            wireCard(document.querySelector(`.card[data-id="${id}"]`), id);
+            const input  = card.querySelector("input");
+            const status = card.querySelector(".status");
+
+            // update status always
+            const { cls, text } = getStatus(Number(data.stock));
+            status.className = `status ${cls}`;
+            status.textContent = text;
+
+            // update input only if not focused
+            if (document.activeElement !== input) {
+              input.value = Number(data.stock);
+            }
           }
         });
-        wireCard(document.querySelectorAll(".card")[i], id);
       });
     });
   </script>
